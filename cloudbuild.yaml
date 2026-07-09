@@ -1,0 +1,107 @@
+# nl CMS dev 環境：build 兩個 images（nl、nl-converter），
+# 部署三個 Cloud Run services（nl-server / nl-mcp / nl-converter）。
+#
+# 一次性前置作業（見 README「Deploy（GCP）」）：
+#   - Cloud SQL PostgreSQL instance + database
+#   - Secret Manager：nl-database-url、nl-session-secret
+#   - 首次部署後，把 nl-server 與 nl-converter 的 URL 填入
+#     trigger 的 _CMS_URL / _RICHTEXT_URL substitutions
+steps:
+  # Pull previous images（layer cache）
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        docker pull gcr.io/$PROJECT_ID/nl:latest || exit 0
+        docker pull gcr.io/$PROJECT_ID/nl-converter:latest || exit 0
+
+  # Build nl（nl-server + nl-mcp）
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nl:latest'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/nl:latest'
+      - .
+
+  # Build nl-converter
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+      - converter
+
+  # Push
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        docker push --all-tags gcr.io/$PROJECT_ID/nl
+        docker push --all-tags gcr.io/$PROJECT_ID/nl-converter
+
+  # Deploy nl-converter（rich text 轉換，無狀態）
+  - name: gcr.io/cloud-builders/gcloud
+    id: deploy-converter
+    args:
+      - run
+      - deploy
+      - 'nl-converter-${_ENV}'
+      - '--image=gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--allow-unauthenticated'
+
+  # Deploy nl-server（GraphQL + Admin UI + OAuth；dev 啟動時自動 migration）
+  - name: gcr.io/cloud-builders/gcloud
+    id: deploy-server
+    args:
+      - run
+      - deploy
+      - 'nl-server-${_ENV}'
+      - '--image=gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=NL_AUTO_MIGRATE=true'
+      - '--set-secrets=DATABASE_URL=nl-database-url:latest,NL_SESSION_SECRET=nl-session-secret:latest'
+      - '--add-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
+
+  # Deploy nl-mcp（MCP resource server，無狀態；經 shell 展開 $PORT）
+  - name: gcr.io/cloud-builders/gcloud
+    id: deploy-mcp
+    args:
+      - run
+      - deploy
+      - 'nl-mcp-${_ENV}'
+      - '--image=gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--allow-unauthenticated'
+      - '--command=/bin/sh'
+      - '--args=-c,exec /app/nl-mcp -http :$${PORT:-8080}'
+      - '--set-env-vars=NL_GRAPHQL_URL=${_CMS_URL}/graphql,NL_CMS_URL=${_CMS_URL},NL_RICHTEXT_URL=${_RICHTEXT_URL}'
+
+substitutions:
+  _ENV: dev
+  _REGION: asia-east1
+  # Cloud SQL instance connection name（project:region:instance）
+  _CLOUDSQL_INSTANCE: ''
+  # 首次部署後回填實際的 Cloud Run URLs
+  _CMS_URL: 'https://nl-server-dev.example.run.app'
+  _RICHTEXT_URL: 'https://nl-converter-dev.example.run.app'
+
+images:
+  - 'gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+  - 'gcr.io/$PROJECT_ID/nl:latest'
+  - 'gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+  - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -22,6 +22,8 @@ type Tx struct {
 	OAuthClient *OAuthClientClient
 	// OAuthCode is the client for interacting with the OAuthCode builders.
 	OAuthCode *OAuthCodeClient
+	// OAuthRefresh is the client for interacting with the OAuthRefresh builders.
+	OAuthRefresh *OAuthRefreshClient
 	// Photo is the client for interacting with the Photo builders.
 	Photo *PhotoClient
 	// Post is the client for interacting with the Post builders.
@@ -168,6 +170,7 @@ func (tx *Tx) init() {
 	tx.Category = NewCategoryClient(tx.config)
 	tx.OAuthClient = NewOAuthClientClient(tx.config)
 	tx.OAuthCode = NewOAuthCodeClient(tx.config)
+	tx.OAuthRefresh = NewOAuthRefreshClient(tx.config)
 	tx.Photo = NewPhotoClient(tx.config)
 	tx.Post = NewPostClient(tx.config)
 	tx.Section = NewSectionClient(tx.config)

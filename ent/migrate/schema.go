@@ -119,6 +119,30 @@ var (
 			},
 		},
 	}
+	// OauthRefreshesColumns holds the columns for the "oauth_refreshes" table.
+	OauthRefreshesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "token_hash", Type: field.TypeString, Unique: true},
+		{Name: "client_id", Type: field.TypeString},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "oauth_refresh_user", Type: field.TypeInt},
+	}
+	// OauthRefreshesTable holds the schema information for the "oauth_refreshes" table.
+	OauthRefreshesTable = &schema.Table{
+		Name:       "oauth_refreshes",
+		Columns:    OauthRefreshesColumns,
+		PrimaryKey: []*schema.Column{OauthRefreshesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "oauth_refreshes_users_user",
+				Columns:    []*schema.Column{OauthRefreshesColumns[6]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// PhotosColumns holds the columns for the "photos" table.
 	PhotosColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -330,6 +354,7 @@ var (
 		CategoriesTable,
 		OauthClientsTable,
 		OauthCodesTable,
+		OauthRefreshesTable,
 		PhotosTable,
 		PostsTable,
 		SectionsTable,
@@ -347,6 +372,7 @@ func init() {
 	AuthorsTable.ForeignKeys[0].RefTable = PhotosTable
 	CategoriesTable.ForeignKeys[0].RefTable = SectionsTable
 	OauthCodesTable.ForeignKeys[0].RefTable = UsersTable
+	OauthRefreshesTable.ForeignKeys[0].RefTable = UsersTable
 	PostsTable.ForeignKeys[0].RefTable = PhotosTable
 	PostsTable.ForeignKeys[1].RefTable = SectionsTable
 	PostsTable.ForeignKeys[2].RefTable = UsersTable

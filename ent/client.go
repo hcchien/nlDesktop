@@ -20,6 +20,7 @@ import (
 	"github.com/hcchien/nl/ent/category"
 	"github.com/hcchien/nl/ent/oauthclient"
 	"github.com/hcchien/nl/ent/oauthcode"
+	"github.com/hcchien/nl/ent/oauthrefresh"
 	"github.com/hcchien/nl/ent/photo"
 	"github.com/hcchien/nl/ent/post"
 	"github.com/hcchien/nl/ent/section"
@@ -42,6 +43,8 @@ type Client struct {
 	OAuthClient *OAuthClientClient
 	// OAuthCode is the client for interacting with the OAuthCode builders.
 	OAuthCode *OAuthCodeClient
+	// OAuthRefresh is the client for interacting with the OAuthRefresh builders.
+	OAuthRefresh *OAuthRefreshClient
 	// Photo is the client for interacting with the Photo builders.
 	Photo *PhotoClient
 	// Post is the client for interacting with the Post builders.
@@ -70,6 +73,7 @@ func (c *Client) init() {
 	c.Category = NewCategoryClient(c.config)
 	c.OAuthClient = NewOAuthClientClient(c.config)
 	c.OAuthCode = NewOAuthCodeClient(c.config)
+	c.OAuthRefresh = NewOAuthRefreshClient(c.config)
 	c.Photo = NewPhotoClient(c.config)
 	c.Post = NewPostClient(c.config)
 	c.Section = NewSectionClient(c.config)
@@ -165,18 +169,19 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		ApiKey:      NewApiKeyClient(cfg),
-		Author:      NewAuthorClient(cfg),
-		Category:    NewCategoryClient(cfg),
-		OAuthClient: NewOAuthClientClient(cfg),
-		OAuthCode:   NewOAuthCodeClient(cfg),
-		Photo:       NewPhotoClient(cfg),
-		Post:        NewPostClient(cfg),
-		Section:     NewSectionClient(cfg),
-		Tag:         NewTagClient(cfg),
-		User:        NewUserClient(cfg),
+		ctx:          ctx,
+		config:       cfg,
+		ApiKey:       NewApiKeyClient(cfg),
+		Author:       NewAuthorClient(cfg),
+		Category:     NewCategoryClient(cfg),
+		OAuthClient:  NewOAuthClientClient(cfg),
+		OAuthCode:    NewOAuthCodeClient(cfg),
+		OAuthRefresh: NewOAuthRefreshClient(cfg),
+		Photo:        NewPhotoClient(cfg),
+		Post:         NewPostClient(cfg),
+		Section:      NewSectionClient(cfg),
+		Tag:          NewTagClient(cfg),
+		User:         NewUserClient(cfg),
 	}, nil
 }
 
@@ -194,18 +199,19 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		ApiKey:      NewApiKeyClient(cfg),
-		Author:      NewAuthorClient(cfg),
-		Category:    NewCategoryClient(cfg),
-		OAuthClient: NewOAuthClientClient(cfg),
-		OAuthCode:   NewOAuthCodeClient(cfg),
-		Photo:       NewPhotoClient(cfg),
-		Post:        NewPostClient(cfg),
-		Section:     NewSectionClient(cfg),
-		Tag:         NewTagClient(cfg),
-		User:        NewUserClient(cfg),
+		ctx:          ctx,
+		config:       cfg,
+		ApiKey:       NewApiKeyClient(cfg),
+		Author:       NewAuthorClient(cfg),
+		Category:     NewCategoryClient(cfg),
+		OAuthClient:  NewOAuthClientClient(cfg),
+		OAuthCode:    NewOAuthCodeClient(cfg),
+		OAuthRefresh: NewOAuthRefreshClient(cfg),
+		Photo:        NewPhotoClient(cfg),
+		Post:         NewPostClient(cfg),
+		Section:      NewSectionClient(cfg),
+		Tag:          NewTagClient(cfg),
+		User:         NewUserClient(cfg),
 	}, nil
 }
 
@@ -235,8 +241,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.ApiKey, c.Author, c.Category, c.OAuthClient, c.OAuthCode, c.Photo, c.Post,
-		c.Section, c.Tag, c.User,
+		c.ApiKey, c.Author, c.Category, c.OAuthClient, c.OAuthCode, c.OAuthRefresh,
+		c.Photo, c.Post, c.Section, c.Tag, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -246,8 +252,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.ApiKey, c.Author, c.Category, c.OAuthClient, c.OAuthCode, c.Photo, c.Post,
-		c.Section, c.Tag, c.User,
+		c.ApiKey, c.Author, c.Category, c.OAuthClient, c.OAuthCode, c.OAuthRefresh,
+		c.Photo, c.Post, c.Section, c.Tag, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -266,6 +272,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.OAuthClient.mutate(ctx, m)
 	case *OAuthCodeMutation:
 		return c.OAuthCode.mutate(ctx, m)
+	case *OAuthRefreshMutation:
+		return c.OAuthRefresh.mutate(ctx, m)
 	case *PhotoMutation:
 		return c.Photo.mutate(ctx, m)
 	case *PostMutation:
@@ -1039,6 +1047,155 @@ func (c *OAuthCodeClient) mutate(ctx context.Context, m *OAuthCodeMutation) (Val
 		return (&OAuthCodeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown OAuthCode mutation op: %q", m.Op())
+	}
+}
+
+// OAuthRefreshClient is a client for the OAuthRefresh schema.
+type OAuthRefreshClient struct {
+	config
+}
+
+// NewOAuthRefreshClient returns a client for the OAuthRefresh from the given config.
+func NewOAuthRefreshClient(c config) *OAuthRefreshClient {
+	return &OAuthRefreshClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `oauthrefresh.Hooks(f(g(h())))`.
+func (c *OAuthRefreshClient) Use(hooks ...Hook) {
+	c.hooks.OAuthRefresh = append(c.hooks.OAuthRefresh, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `oauthrefresh.Intercept(f(g(h())))`.
+func (c *OAuthRefreshClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OAuthRefresh = append(c.inters.OAuthRefresh, interceptors...)
+}
+
+// Create returns a builder for creating a OAuthRefresh entity.
+func (c *OAuthRefreshClient) Create() *OAuthRefreshCreate {
+	mutation := newOAuthRefreshMutation(c.config, OpCreate)
+	return &OAuthRefreshCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OAuthRefresh entities.
+func (c *OAuthRefreshClient) CreateBulk(builders ...*OAuthRefreshCreate) *OAuthRefreshCreateBulk {
+	return &OAuthRefreshCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OAuthRefreshClient) MapCreateBulk(slice any, setFunc func(*OAuthRefreshCreate, int)) *OAuthRefreshCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OAuthRefreshCreateBulk{err: fmt.Errorf("calling to OAuthRefreshClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OAuthRefreshCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OAuthRefreshCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OAuthRefresh.
+func (c *OAuthRefreshClient) Update() *OAuthRefreshUpdate {
+	mutation := newOAuthRefreshMutation(c.config, OpUpdate)
+	return &OAuthRefreshUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OAuthRefreshClient) UpdateOne(_m *OAuthRefresh) *OAuthRefreshUpdateOne {
+	mutation := newOAuthRefreshMutation(c.config, OpUpdateOne, withOAuthRefresh(_m))
+	return &OAuthRefreshUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OAuthRefreshClient) UpdateOneID(id int) *OAuthRefreshUpdateOne {
+	mutation := newOAuthRefreshMutation(c.config, OpUpdateOne, withOAuthRefreshID(id))
+	return &OAuthRefreshUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OAuthRefresh.
+func (c *OAuthRefreshClient) Delete() *OAuthRefreshDelete {
+	mutation := newOAuthRefreshMutation(c.config, OpDelete)
+	return &OAuthRefreshDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OAuthRefreshClient) DeleteOne(_m *OAuthRefresh) *OAuthRefreshDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OAuthRefreshClient) DeleteOneID(id int) *OAuthRefreshDeleteOne {
+	builder := c.Delete().Where(oauthrefresh.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OAuthRefreshDeleteOne{builder}
+}
+
+// Query returns a query builder for OAuthRefresh.
+func (c *OAuthRefreshClient) Query() *OAuthRefreshQuery {
+	return &OAuthRefreshQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOAuthRefresh},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OAuthRefresh entity by its id.
+func (c *OAuthRefreshClient) Get(ctx context.Context, id int) (*OAuthRefresh, error) {
+	return c.Query().Where(oauthrefresh.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OAuthRefreshClient) GetX(ctx context.Context, id int) *OAuthRefresh {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a OAuthRefresh.
+func (c *OAuthRefreshClient) QueryUser(_m *OAuthRefresh) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(oauthrefresh.Table, oauthrefresh.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, oauthrefresh.UserTable, oauthrefresh.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OAuthRefreshClient) Hooks() []Hook {
+	return c.hooks.OAuthRefresh
+}
+
+// Interceptors returns the client interceptors.
+func (c *OAuthRefreshClient) Interceptors() []Interceptor {
+	return c.inters.OAuthRefresh
+}
+
+func (c *OAuthRefreshClient) mutate(ctx context.Context, m *OAuthRefreshMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OAuthRefreshCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OAuthRefreshUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OAuthRefreshUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OAuthRefreshDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OAuthRefresh mutation op: %q", m.Op())
 	}
 }
 
@@ -1870,11 +2027,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		ApiKey, Author, Category, OAuthClient, OAuthCode, Photo, Post, Section, Tag,
-		User []ent.Hook
+		ApiKey, Author, Category, OAuthClient, OAuthCode, OAuthRefresh, Photo, Post,
+		Section, Tag, User []ent.Hook
 	}
 	inters struct {
-		ApiKey, Author, Category, OAuthClient, OAuthCode, Photo, Post, Section, Tag,
-		User []ent.Interceptor
+		ApiKey, Author, Category, OAuthClient, OAuthCode, OAuthRefresh, Photo, Post,
+		Section, Tag, User []ent.Interceptor
 	}
 )

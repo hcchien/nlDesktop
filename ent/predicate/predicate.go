@@ -21,6 +21,9 @@ type OAuthClient func(*sql.Selector)
 // OAuthCode is the predicate function for oauthcode builders.
 type OAuthCode func(*sql.Selector)
 
+// OAuthRefresh is the predicate function for oauthrefresh builders.
+type OAuthRefresh func(*sql.Selector)
+
 // Photo is the predicate function for photo builders.
 type Photo func(*sql.Selector)
 

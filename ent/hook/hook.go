@@ -69,6 +69,18 @@ func (f OAuthCodeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OAuthCodeMutation", m)
 }
 
+// The OAuthRefreshFunc type is an adapter to allow the use of ordinary
+// function as OAuthRefresh mutator.
+type OAuthRefreshFunc func(context.Context, *ent.OAuthRefreshMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OAuthRefreshFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OAuthRefreshMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OAuthRefreshMutation", m)
+}
+
 // The PhotoFunc type is an adapter to allow the use of ordinary
 // function as Photo mutator.
 type PhotoFunc func(context.Context, *ent.PhotoMutation) (ent.Value, error)

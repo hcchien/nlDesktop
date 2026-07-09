@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+converter/node_modules
+e2e
+scripts
+nltest
+*.md
+nl-server
+nl-mcp
+nl-server-bin

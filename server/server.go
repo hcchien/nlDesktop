@@ -13,6 +13,7 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/hcchien/nl/access"
+	"github.com/hcchien/nl/admin"
 	"github.com/hcchien/nl/auth"
 	"github.com/hcchien/nl/ent"
 	"github.com/hcchien/nl/ent/apikey"
@@ -28,11 +29,17 @@ func New(client *ent.Client, tokenSecret []byte) http.Handler {
 	}))
 	srv.AroundFields(fieldReadMiddleware)
 
+	gqlHandler := authMiddleware(client, tokenSecret, srv)
+
 	mux := http.NewServeMux()
 	mux.Handle("/", playground.Handler("nl CMS", "/graphql"))
-	mux.Handle("/graphql", authMiddleware(client, tokenSecret, srv))
+	mux.Handle("/graphql", gqlHandler)
 	// OAuth 2.1 authorization server（MCP clients 的「連接→登入」流程）
 	(&oauth.Server{Client: client, Secret: tokenSecret}).Mount(mux)
+	// Admin UI：所有操作經 in-process GraphQL（帶登入者 token），權限與 API/MCP 一致
+	adminHandler := admin.New(gqlHandler, tokenSecret)
+	mux.Handle("/admin", adminHandler)
+	mux.Handle("/admin/", adminHandler)
 	return mux
 }
 

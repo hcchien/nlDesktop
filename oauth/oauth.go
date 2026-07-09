@@ -29,6 +29,7 @@ import (
 	"github.com/hcchien/nl/ent"
 	"github.com/hcchien/nl/ent/oauthclient"
 	"github.com/hcchien/nl/ent/oauthcode"
+	"github.com/hcchien/nl/ent/oauthrefresh"
 	"github.com/hcchien/nl/ent/user"
 )
 
@@ -36,15 +37,24 @@ import (
 type Server struct {
 	Client *ent.Client
 	Secret []byte
-	// AccessTokenTTL 預設 7 天（v1 未實作 refresh token，見 PLAN）
+	// AccessTokenTTL 預設 1 小時（過期由 refresh token 換發）
 	AccessTokenTTL time.Duration
+	// RefreshTokenTTL 預設 30 天（rotation：每次使用即換發）
+	RefreshTokenTTL time.Duration
 }
 
 func (s *Server) ttl() time.Duration {
 	if s.AccessTokenTTL > 0 {
 		return s.AccessTokenTTL
 	}
-	return 7 * 24 * time.Hour
+	return time.Hour
+}
+
+func (s *Server) refreshTTL() time.Duration {
+	if s.RefreshTokenTTL > 0 {
+		return s.RefreshTokenTTL
+	}
+	return 30 * 24 * time.Hour
 }
 
 // Mount 將所有 endpoints 掛上 mux。
@@ -95,7 +105,7 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 		"token_endpoint":                        base + "/oauth/token",
 		"registration_endpoint":                 base + "/oauth/register",
 		"response_types_supported":              []string{"code"},
-		"grant_types_supported":                 []string{"authorization_code"},
+		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none"}, // public clients
 	})
@@ -269,16 +279,24 @@ func redirectError(w http.ResponseWriter, r *http.Request, p *authzParams, code,
 	http.Redirect(w, r, dest.String(), http.StatusFound)
 }
 
-// token：authorization_code + PKCE verifier → access token。
+// token：authorization_code + PKCE verifier → access + refresh token；
+// refresh_token grant 換發新的一組（rotation）。
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
-	if r.PostFormValue("grant_type") != "authorization_code" {
+	switch r.PostFormValue("grant_type") {
+	case "authorization_code":
+		s.tokenFromCode(w, r)
+	case "refresh_token":
+		s.tokenFromRefresh(w, r)
+	default:
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
-		return
 	}
+}
+
+func (s *Server) tokenFromCode(w http.ResponseWriter, r *http.Request) {
 	sys := auth.WithSystem(r.Context())
 	code := r.PostFormValue("code")
 	oc, err := s.Client.OAuthCode.Query().
@@ -305,12 +323,51 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	case subtle.ConstantTimeCompare([]byte(challenge), []byte(oc.CodeChallenge)) != 1:
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "PKCE verification failed"})
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{
-			"access_token": auth.SignToken(s.Secret, oc.Edges.User.ID, s.ttl()),
-			"token_type":   "Bearer",
-			"expires_in":   int(s.ttl().Seconds()),
-		})
+		s.issueTokens(w, r, oc.Edges.User.ID, oc.ClientID)
 	}
+}
+
+func (s *Server) tokenFromRefresh(w http.ResponseWriter, r *http.Request) {
+	sys := auth.WithSystem(r.Context())
+	rt, err := s.Client.OAuthRefresh.Query().
+		Where(oauthrefresh.TokenHashEQ(hashToken(r.PostFormValue("refresh_token")))).
+		WithUser().
+		Only(sys)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+		return
+	}
+	// rotation：使用即銷毀（重放舊 refresh token 必失敗）
+	_ = s.Client.OAuthRefresh.DeleteOne(rt).Exec(sys)
+
+	switch {
+	case time.Now().After(rt.ExpiresAt):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "refresh token expired"})
+	case rt.ClientID != r.PostFormValue("client_id"):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "client mismatch"})
+	default:
+		s.issueTokens(w, r, rt.Edges.User.ID, rt.ClientID)
+	}
+}
+
+// issueTokens 核發 access + refresh token 一組。
+func (s *Server) issueTokens(w http.ResponseWriter, r *http.Request, userID int, clientID string) {
+	refresh := "nlr_" + randomHex(32)
+	if _, err := s.Client.OAuthRefresh.Create().
+		SetTokenHash(hashToken(refresh)).
+		SetClientID(clientID).
+		SetExpiresAt(time.Now().Add(s.refreshTTL())).
+		SetUserID(userID).
+		Save(auth.WithSystem(r.Context())); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"access_token":  auth.SignToken(s.Secret, userID, s.ttl()),
+		"token_type":    "Bearer",
+		"expires_in":    int(s.ttl().Seconds()),
+		"refresh_token": refresh,
+	})
 }
 
 func randomHex(n int) string {

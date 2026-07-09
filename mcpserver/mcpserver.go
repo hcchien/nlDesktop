@@ -322,7 +322,9 @@ func registerTools(s *mcp.Server, c *gqlClient) {
 		if !ok {
 			return nil, nil, fmt.Errorf("unknown list %q", in.List)
 		}
-		q := fmt.Sprintf("query($id: ID!){ item: node(id: $id){ ... on %s {%s} } }", l.Name, l.Selection())
+		// 以 where:{id} 查單筆（node(id) 需要 global-unique-ID，本框架採 per-table id）
+		q := fmt.Sprintf("query($id: ID){ items: %s(where:{id: $id}, first: 1){ edges{node{%s}} } }",
+			l.QueryField, l.Selection())
 		res, err := c.do(ctx, q, map[string]any{"id": in.ID})
 		if err != nil {
 			return nil, nil, err

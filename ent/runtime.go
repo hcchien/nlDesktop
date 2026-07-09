@@ -10,6 +10,7 @@ import (
 	"github.com/hcchien/nl/ent/category"
 	"github.com/hcchien/nl/ent/oauthclient"
 	"github.com/hcchien/nl/ent/oauthcode"
+	"github.com/hcchien/nl/ent/oauthrefresh"
 	"github.com/hcchien/nl/ent/photo"
 	"github.com/hcchien/nl/ent/post"
 	"github.com/hcchien/nl/ent/schema"
@@ -159,6 +160,29 @@ func init() {
 	oauthcodeDescExpiresAt := oauthcodeFields[4].Descriptor()
 	// oauthcode.DefaultExpiresAt holds the default value on creation for the expires_at field.
 	oauthcode.DefaultExpiresAt = oauthcodeDescExpiresAt.Default.(func() time.Time)
+	oauthrefreshMixin := schema.OAuthRefresh{}.Mixin()
+	oauthrefreshMixinFields0 := oauthrefreshMixin[0].Fields()
+	_ = oauthrefreshMixinFields0
+	oauthrefreshFields := schema.OAuthRefresh{}.Fields()
+	_ = oauthrefreshFields
+	// oauthrefreshDescCreatedAt is the schema descriptor for created_at field.
+	oauthrefreshDescCreatedAt := oauthrefreshMixinFields0[0].Descriptor()
+	// oauthrefresh.DefaultCreatedAt holds the default value on creation for the created_at field.
+	oauthrefresh.DefaultCreatedAt = oauthrefreshDescCreatedAt.Default.(func() time.Time)
+	// oauthrefreshDescUpdatedAt is the schema descriptor for updated_at field.
+	oauthrefreshDescUpdatedAt := oauthrefreshMixinFields0[1].Descriptor()
+	// oauthrefresh.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	oauthrefresh.DefaultUpdatedAt = oauthrefreshDescUpdatedAt.Default.(func() time.Time)
+	// oauthrefresh.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	oauthrefresh.UpdateDefaultUpdatedAt = oauthrefreshDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// oauthrefreshDescTokenHash is the schema descriptor for token_hash field.
+	oauthrefreshDescTokenHash := oauthrefreshFields[0].Descriptor()
+	// oauthrefresh.TokenHashValidator is a validator for the "token_hash" field. It is called by the builders before save.
+	oauthrefresh.TokenHashValidator = oauthrefreshDescTokenHash.Validators[0].(func(string) error)
+	// oauthrefreshDescClientID is the schema descriptor for client_id field.
+	oauthrefreshDescClientID := oauthrefreshFields[1].Descriptor()
+	// oauthrefresh.ClientIDValidator is a validator for the "client_id" field. It is called by the builders before save.
+	oauthrefresh.ClientIDValidator = oauthrefreshDescClientID.Validators[0].(func(string) error)
 	photoMixin := schema.Photo{}.Mixin()
 	photoMixinFields0 := photoMixin[0].Fields()
 	_ = photoMixinFields0

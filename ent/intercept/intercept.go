@@ -13,6 +13,7 @@ import (
 	"github.com/hcchien/nl/ent/category"
 	"github.com/hcchien/nl/ent/oauthclient"
 	"github.com/hcchien/nl/ent/oauthcode"
+	"github.com/hcchien/nl/ent/oauthrefresh"
 	"github.com/hcchien/nl/ent/photo"
 	"github.com/hcchien/nl/ent/post"
 	"github.com/hcchien/nl/ent/predicate"
@@ -212,6 +213,33 @@ func (f TraverseOAuthCode) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.OAuthCodeQuery", q)
 }
 
+// The OAuthRefreshFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OAuthRefreshFunc func(context.Context, *ent.OAuthRefreshQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OAuthRefreshFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OAuthRefreshQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OAuthRefreshQuery", q)
+}
+
+// The TraverseOAuthRefresh type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOAuthRefresh func(context.Context, *ent.OAuthRefreshQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOAuthRefresh) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOAuthRefresh) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OAuthRefreshQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OAuthRefreshQuery", q)
+}
+
 // The PhotoFunc type is an adapter to allow the use of ordinary function as a Querier.
 type PhotoFunc func(context.Context, *ent.PhotoQuery) (ent.Value, error)
 
@@ -360,6 +388,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.OAuthClientQuery, predicate.OAuthClient, oauthclient.OrderOption]{typ: ent.TypeOAuthClient, tq: q}, nil
 	case *ent.OAuthCodeQuery:
 		return &query[*ent.OAuthCodeQuery, predicate.OAuthCode, oauthcode.OrderOption]{typ: ent.TypeOAuthCode, tq: q}, nil
+	case *ent.OAuthRefreshQuery:
+		return &query[*ent.OAuthRefreshQuery, predicate.OAuthRefresh, oauthrefresh.OrderOption]{typ: ent.TypeOAuthRefresh, tq: q}, nil
 	case *ent.PhotoQuery:
 		return &query[*ent.PhotoQuery, predicate.Photo, photo.OrderOption]{typ: ent.TypePhoto, tq: q}, nil
 	case *ent.PostQuery:

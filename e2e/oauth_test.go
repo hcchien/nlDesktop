@@ -23,6 +23,12 @@ const redirectURI = "http://localhost:19999/callback"
 // oauthToken 跑完整 OAuth 2.1 flow（DCR → authorize → code → token），
 // 回傳綁定該使用者的 access token。
 func oauthToken(t *testing.T, e *env, email string) string {
+	access, _, _ := oauthTokens(t, e, email)
+	return access
+}
+
+// oauthTokens 同 oauthToken，另回傳 refresh token 與 client_id。
+func oauthTokens(t *testing.T, e *env, email string) (access, refresh, clientID string) {
 	t.Helper()
 	// 1. Dynamic client registration
 	body, _ := json.Marshal(map[string]any{
@@ -91,17 +97,18 @@ func oauthToken(t *testing.T, e *env, email string) string {
 	}
 	defer resp3.Body.Close()
 	var tok struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		Error       string `json:"error"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		Error        string `json:"error"`
 	}
 	if err := json.NewDecoder(resp3.Body).Decode(&tok); err != nil {
 		t.Fatal(err)
 	}
-	if tok.Error != "" || tok.AccessToken == "" || tok.TokenType != "Bearer" {
+	if tok.Error != "" || tok.AccessToken == "" || tok.RefreshToken == "" || tok.TokenType != "Bearer" {
 		t.Fatalf("token response: %+v (status %d)", tok, resp3.StatusCode)
 	}
-	return tok.AccessToken
+	return tok.AccessToken, tok.RefreshToken, reg.ClientID
 }
 
 type authedTransport struct{ token string }
@@ -210,6 +217,36 @@ func TestOAuthFlow(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&out)
 		if !strings.Contains(string(out.Data["me"]), `"editor"`) {
 			t.Errorf("me via OAuth token = %s, want editor", out.Data["me"])
+		}
+	})
+
+	t.Run("RefreshRotation", func(t *testing.T) {
+		_, refresh, clientID := oauthTokens(t, e, "editor@test.local")
+
+		exchange := func(rt string) (int, map[string]any) {
+			resp, err := http.PostForm(e.ts.URL+"/oauth/token", url.Values{
+				"grant_type": {"refresh_token"}, "refresh_token": {rt}, "client_id": {clientID},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			var out map[string]any
+			json.NewDecoder(resp.Body).Decode(&out)
+			return resp.StatusCode, out
+		}
+
+		status, out := exchange(refresh)
+		if status != http.StatusOK || out["access_token"] == nil || out["refresh_token"] == nil {
+			t.Fatalf("refresh exchange failed: %d %v", status, out)
+		}
+		// rotation：舊 refresh token 重放必須失敗
+		if status, _ := exchange(refresh); status != http.StatusBadRequest {
+			t.Errorf("replayed refresh token: status = %d, want 400", status)
+		}
+		// 新的一組可以繼續換
+		if status, _ := exchange(out["refresh_token"].(string)); status != http.StatusOK {
+			t.Errorf("rotated refresh token rejected: status = %d", status)
 		}
 	})
 

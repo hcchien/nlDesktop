@@ -10,7 +10,8 @@ import { generateHTML, generateJSON } from '@tiptap/html'
 import { marked } from 'marked'
 import { extensions } from './schema.mjs'
 
-const port = Number(process.env.RICHTEXT_PORT || 8082)
+// Cloud Run 等平台以 PORT 指定；本機開發用 RICHTEXT_PORT（預設 8082）
+const port = Number(process.env.PORT || process.env.RICHTEXT_PORT || 8082)
 
 function readBody(req) {
   return new Promise((resolve, reject) => {

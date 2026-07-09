@@ -8,11 +8,23 @@
 >（RFC 9728 protected-resource metadata、401 挑戰、token 逐請求轉發）。
 > e2e 驗證「兩個不同權限使用者連同一 nl-mcp、各自登入、權限視圖不同」。
 >
+> v0.7（2026-07-09）新增：
+> - **Versioned migration**：`migrate diff <name>`（ent NamedDiff/Atlas 引擎 →
+>   golang-migrate 格式 up/down SQL 檔）+ `migrate up`（內嵌 applier，
+>   schema_migrations 記錄）。SQL 檔進 git 接受 review，可手動編輯（資料遷移、
+>   USING 轉型等 diff 推不出來的操作）。
+> - **OAuth refresh token**：rotation（使用即換發，重放必失敗），access token 縮至
+>   1 小時、refresh 30 天。
+> - **Admin UI v1**：/admin，server-rendered + schema-driven（表單由 meta 生成），
+>   所有操作經 in-process GraphQL 帶登入者 token —— 權限與 API/MCP 同一關卡。
+>   richText 暫以 JSON textarea 呈現；內嵌 Tiptap、CSRF token 列後續。
+>
 > 設計註記：
-> - OAuth v1 未含 refresh token（access token 7 天）；refresh + revocation 列後續。
 > - 巢狀關聯展開跟隨目標 list 權限，無權限時降級 null/空（Keystone 語意）；
->   top-level 查詢才報 access denied。`node(id)` 介面視同巢狀（無權限回 null）。
-> 下一步：draft.js 遷移腳本、Atlas versioned migration、Admin UI。
+>   top-level 查詢才報 access denied。
+> - Relay `node(id)` 需要 global-unique-ID（ent_types 表），本框架採 per-table id，
+>   單筆查詢一律用 `<list>(where:{id})`；node/nodes 欄位保留但不使用。
+> 下一步：draft.js 遷移腳本、Admin UI 內嵌 Tiptap、token revocation UI。
 > 目標：一個以 Go 撰寫的 headless CMS / admin framework，開發者用宣告式的方式定義
 > lists 與 fields，框架透過 **codegen** 產生型別安全的程式碼，自動處理 DB migration、
 > GraphQL API、權限控管，並提供**獨立部署的 MCP server**。

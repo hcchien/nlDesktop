@@ -1,0 +1,155 @@
+package e2e
+
+import (
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+// adminClient 回傳已登入 admin UI 的 http client（cookie session）。
+func adminClient(t *testing.T, e *env, email string) *http.Client {
+	t.Helper()
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar}
+	resp, err := c.PostForm(e.ts.URL+"/admin/login", url.Values{
+		"email": {email}, "password": {"password123"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Request.URL.Path != "/admin" {
+		t.Fatalf("login did not redirect to /admin (got %s)", resp.Request.URL.Path)
+	}
+	return c
+}
+
+func fetch(t *testing.T, c *http.Client, url string) (int, string) {
+	t.Helper()
+	resp, err := c.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var b strings.Builder
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		b.Write(buf[:n])
+		if err != nil {
+			break
+		}
+	}
+	return resp.StatusCode, b.String()
+}
+
+func TestAdminUI(t *testing.T) {
+	e := setup(t)
+
+	t.Run("RequiresLogin", func(t *testing.T) {
+		noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}
+		resp, err := noRedirect.Get(e.ts.URL + "/admin")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/admin/login" {
+			t.Errorf("unauthenticated /admin: %d → %s", resp.StatusCode, resp.Header.Get("Location"))
+		}
+	})
+
+	t.Run("WrongPassword", func(t *testing.T) {
+		c := &http.Client{}
+		resp, err := c.PostForm(e.ts.URL+"/admin/login", url.Values{
+			"email": {"editor@test.local"}, "password": {"nope"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("wrong password: status %d, want 401", resp.StatusCode)
+		}
+	})
+
+	t.Run("EditorSeesOwnPostsOnly", func(t *testing.T) {
+		c := adminClient(t, e, "editor@test.local")
+		status, body := fetch(t, c, e.ts.URL+"/admin/l/Post")
+		if status != http.StatusOK {
+			t.Fatalf("list view status %d", status)
+		}
+		if !strings.Contains(body, "editor 的已發布文章") {
+			t.Error("editor's own post missing from list view")
+		}
+		if strings.Contains(body, "contributor 的草稿") {
+			t.Error("row filter leaked another user's post into admin list view")
+		}
+	})
+
+	t.Run("ContributorDeniedUserList", func(t *testing.T) {
+		c := adminClient(t, e, "contributor@test.local")
+		// 導覽不含 User，直接打 URL 也會被資料層擋下
+		_, body := fetch(t, c, e.ts.URL+"/admin/l/User")
+		if !strings.Contains(body, "access denied") {
+			t.Error("contributor should see access denied on /admin/l/User")
+		}
+	})
+
+	t.Run("CreateAndEditPost", func(t *testing.T) {
+		c := adminClient(t, e, "moderator@test.local")
+		resp, err := c.PostForm(e.ts.URL+"/admin/l/Post/new", url.Values{
+			"title": {"admin UI 建立的文章"},
+			"state": {"draft"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		// 成功會 redirect 到 /admin/l/Post/{id}（跟隨後為 200 表單頁）
+		if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Request.URL.Path, "/admin/l/Post/") {
+			t.Fatalf("create did not land on item page: %d %s", resp.StatusCode, resp.Request.URL.Path)
+		}
+		itemURL := resp.Request.URL.String()
+
+		// 修改標題（帶 state 維持 select 值）
+		resp2, err := c.PostForm(itemURL, url.Values{
+			"title": {"admin UI 改過的標題"},
+			"state": {"draft"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var eb strings.Builder
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := resp2.Body.Read(buf)
+			eb.Write(buf[:n])
+			if err != nil {
+				break
+			}
+		}
+		resp2.Body.Close()
+		_, body := fetch(t, c, itemURL)
+		if !strings.Contains(body, "admin UI 改過的標題") {
+			t.Errorf("edited title not reflected on item page; update response contained: %s",
+				extractErr(eb.String()))
+		}
+	})
+}
+
+// extractErr 從 HTML 中抓出 err div 內容（測試診斷用）。
+func extractErr(html string) string {
+	i := strings.Index(html, `class="err"`)
+	if i < 0 {
+		return "(no error div)"
+	}
+	j := strings.Index(html[i:], "</div>")
+	if j < 0 {
+		return html[i:]
+	}
+	return html[i : i+j]
+}

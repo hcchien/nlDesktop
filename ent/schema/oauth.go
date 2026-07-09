@@ -77,3 +77,39 @@ func (OAuthCode) Annotations() []schema.Annotation {
 		entgql.Skip(entgql.SkipAll),
 	}
 }
+
+// OAuthRefresh 是 refresh token（rotation：每次使用即銷毀換發新的一組）。
+// 內部實體。
+type OAuthRefresh struct {
+	ent.Schema
+}
+
+func (OAuthRefresh) Mixin() []ent.Mixin {
+	return []ent.Mixin{TimeMixin{}}
+}
+
+func (OAuthRefresh) Fields() []ent.Field {
+	return []ent.Field{
+		// 只存 SHA-256 雜湊
+		field.String("token_hash").
+			NotEmpty().
+			Unique(),
+		field.String("client_id").
+			NotEmpty(),
+		field.Time("expires_at"),
+	}
+}
+
+func (OAuthRefresh) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.To("user", User.Type).
+			Unique().
+			Required(),
+	}
+}
+
+func (OAuthRefresh) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entgql.Skip(entgql.SkipAll),
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/hcchien/nl/ent/category"
 	"github.com/hcchien/nl/ent/oauthclient"
 	"github.com/hcchien/nl/ent/oauthcode"
+	"github.com/hcchien/nl/ent/oauthrefresh"
 	"github.com/hcchien/nl/ent/photo"
 	"github.com/hcchien/nl/ent/post"
 	"github.com/hcchien/nl/ent/section"
@@ -82,16 +83,17 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apikey.Table:      apikey.ValidColumn,
-			author.Table:      author.ValidColumn,
-			category.Table:    category.ValidColumn,
-			oauthclient.Table: oauthclient.ValidColumn,
-			oauthcode.Table:   oauthcode.ValidColumn,
-			photo.Table:       photo.ValidColumn,
-			post.Table:        post.ValidColumn,
-			section.Table:     section.ValidColumn,
-			tag.Table:         tag.ValidColumn,
-			user.Table:        user.ValidColumn,
+			apikey.Table:       apikey.ValidColumn,
+			author.Table:       author.ValidColumn,
+			category.Table:     category.ValidColumn,
+			oauthclient.Table:  oauthclient.ValidColumn,
+			oauthcode.Table:    oauthcode.ValidColumn,
+			oauthrefresh.Table: oauthrefresh.ValidColumn,
+			photo.Table:        photo.ValidColumn,
+			post.Table:         post.ValidColumn,
+			section.Table:      section.ValidColumn,
+			tag.Table:          tag.ValidColumn,
+			user.Table:         user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

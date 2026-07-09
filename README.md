@@ -146,18 +146,71 @@ go run ./cmd/nl gen   # 展開 ent schema / GraphQL mutations / resolvers / owne
   Markdown 字串（agent 丟 Word/GDoc 轉出的 HTML 即可），nl-mcp 自動經 converter
   轉成 PM JSON；也可直接給 doc JSON 物件。`NL_RICHTEXT_URL` 指定 converter 位址。
 
-## Migration（prod）
+## Admin UI
 
-dev 模式啟動時自動套用 migration；正式環境建議兩段式：
+`http://localhost:8080/admin` —— server-rendered、schema-driven 的管理後台：
+列表（cursor 分頁）、編輯表單（欄位依 DSL 型別生成：select 下拉、關聯單/多選、
+datetime、richText JSON）、新增與刪除。**所有操作經 in-process GraphQL、
+帶登入者自己的 token**，權限與 API/MCP 完全一致，admin 沒有特權路徑
+（editor 登入只看得到自己的文章、contributor 打 /admin/l/User 會被資料層擋下）。
+richText 目前以 JSON textarea 呈現，內嵌 Tiptap 編輯器為後續工作。
+
+## Migration
+
+dev 模式啟動時自動套用（`NL_AUTO_MIGRATE=false` 可關閉）。正式環境兩條路：
 
 ```bash
-export NL_AUTO_MIGRATE=false          # server 啟動不再自動改 DB
-nl-server migrate plan                 # 印出 pending DDL 供 review（不執行）
-nl-server migrate apply                # review 過後套用（非破壞性；不會 drop column/table）
+# 快速路徑：declarative 兩段式
+nl-server migrate plan                 # 印出「宣告 vs DB 現況」的 DDL（不執行）
+nl-server migrate apply                # review 過後套用（非破壞性）
+
+# 正式路徑：versioned migration（Atlas 引擎，golang-migrate 格式）
+nl-server migrate diff <name>          # 產生 migrations/<ts>_<name>.up/.down.sql
+                                       # （SQL 檔進 git、與 schema 變更同 PR review，
+                                       #   可手動編輯：資料遷移、USING 轉型、CONCURRENTLY）
+nl-server migrate up                   # 按序套用未執行的版本（記錄於 schema_migrations）
 ```
 
-刪除欄位/資料表等破壞性變更不會自動執行，需另行處理（Atlas versioned
-migration 整合在 roadmap 上）。
+`migrate diff` 需要一個 scratch DB 重放既有 migrations（`NL_DEV_DATABASE_URL`，
+預設 `nl_migrate_dev`，不存在會自動建立）。
+
+## Deploy（GCP dev）
+
+拓撲：三個無狀態 Cloud Run services + Cloud SQL。Admin UI 內建於 nl-server，
+不是獨立 instance。
+
+```
+nl-server     GraphQL + /admin + OAuth AS + migration（唯一連 DB 的服務）
+nl-mcp        MCP resource server（打 nl-server 的 GraphQL）
+nl-converter  rich text 轉換（被 nl-mcp 呼叫）
+Cloud SQL     PostgreSQL（唯一有狀態元件）
+```
+
+一次性前置作業：
+
+```bash
+# 1. Cloud SQL（PostgreSQL 16）+ database
+gcloud sql instances create nl-dev --database-version=POSTGRES_16 --region=asia-east1 --tier=db-f1-micro
+gcloud sql databases create nl --instance=nl-dev
+
+# 2. Secrets（DATABASE_URL 用 Cloud SQL unix socket 形式）
+echo -n "postgres://USER:PASS@/nl?host=/cloudsql/PROJECT:asia-east1:nl-dev&sslmode=disable" | \
+  gcloud secrets create nl-database-url --data-file=-
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create nl-session-secret --data-file=-
+
+# 3. 首次 build & deploy（_CMS_URL/_RICHTEXT_URL 先用預設值）
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_CLOUDSQL_INSTANCE=PROJECT:asia-east1:nl-dev
+
+# 4. 取得 nl-server / nl-converter 的實際 URL，回填 substitutions 再跑一次
+#    （或設定 Cloud Build trigger 並在 trigger 上設定 substitutions）
+gcloud run services list --region=asia-east1
+```
+
+dev 環境 nl-server 啟動時自動套用 migration（`NL_AUTO_MIGRATE=true`）；
+prod 應改為 false 並在 release 流程執行 `nl-server migrate up`（versioned）。
+dev 三個服務都 `--allow-unauthenticated`（nl-server/nl-mcp 本來就要公開給
+OAuth 與 MCP clients）；prod 時 nl-converter 應改 service-to-service auth 或 internal ingress。
 
 ## 測試
 
