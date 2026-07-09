@@ -7,11 +7,12 @@ package admin
 
 import (
 	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,12 @@ import (
 	"github.com/hcchien/nl/access"
 	"github.com/hcchien/nl/meta"
 )
+
+// 前端 bundle（Tiptap 編輯器 + 關聯 picker），由 converter 以同一份
+// Tiptap schema 建置：cd converter && npm run build
+//
+//go:embed static
+var staticFS embed.FS
 
 const cookieName = "nl_admin"
 
@@ -42,7 +49,45 @@ func New(gql http.Handler, secret []byte) http.Handler {
 	mux.HandleFunc("GET /admin/l/{list}/{id}", h.requireAuth(h.itemForm))
 	mux.HandleFunc("POST /admin/l/{list}/{id}", h.requireAuth(h.itemSubmit))
 	mux.HandleFunc("POST /admin/l/{list}/{id}/delete", h.requireAuth(h.itemDelete))
+	mux.HandleFunc("GET /admin/api/options", h.requireAuth(h.optionsAPI))
+	static, _ := fs.Sub(staticFS, "static")
+	mux.Handle("GET /admin/static/", http.StripPrefix("/admin/static/", http.FileServerFS(static)))
 	return mux
+}
+
+// optionsAPI 供關聯 picker 搜尋目標 list（label contains，不分大小寫）。
+// 經 GraphQL 查詢，權限與其他操作一致。
+func (h *Handler) optionsAPI(w http.ResponseWriter, r *http.Request, s *session) {
+	l, ok := meta.Get(r.URL.Query().Get("list"))
+	if !ok {
+		http.Error(w, "unknown list", http.StatusBadRequest)
+		return
+	}
+	q := fmt.Sprintf(`query($where: %sWhereInput){ items: %s(first: 20, where: $where){ edges{node{ id %s }} } }`,
+		l.Name, l.QueryField, l.LabelField)
+	where := map[string]any{l.LabelField + "ContainsFold": r.URL.Query().Get("q")}
+	data, errs := h.exec(s.token, q, map[string]any{"where": where})
+	type opt struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+	}
+	out := []opt{}
+	if len(errs) == 0 && data["items"] != nil {
+		var conn struct {
+			Edges []struct {
+				Node map[string]any `json:"node"`
+			} `json:"edges"`
+		}
+		if json.Unmarshal(data["items"], &conn) == nil {
+			for _, e := range conn.Edges {
+				id, _ := e.Node["id"].(string)
+				label, _ := e.Node[l.LabelField].(string)
+				out = append(out, opt{ID: id, Label: label})
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
 
 // ---- auth ----
@@ -305,24 +350,23 @@ func (h *Handler) itemDelete(w http.ResponseWriter, r *http.Request, s *session)
 // ---- 表單建構 ----
 
 type option struct {
-	ID       string
-	Label    string
-	Selected bool
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type formField struct {
-	Name     string
-	Type     string
-	Required bool
-	Note     string
-	Value    string   // text / integer / timestamp
-	Checked  bool     // boolean
-	Enum     []string // select
-	JSON     string   // richText
-	Ref      string   // relationship
-	Many     bool
-	Options  []option
-	Denied   bool // 無權查詢關聯目標 list（欄位唯讀）
+	Name         string
+	Type         string
+	Required     bool
+	Note         string
+	Value        string   // text / integer / timestamp
+	Checked      bool     // boolean
+	Enum         []string // select
+	JSON         string   // richText（PM doc JSON，編輯器初始內容）
+	Ref          string   // relationship
+	Many         bool
+	SelectedJSON string // relationship 現值 [{id,label}]，picker 初始 chips
+	Denied       bool   // 無權查詢關聯目標 list（欄位唯讀）
 }
 
 // buildFormFields 依 meta 欄位型別產生表單欄位（含關聯選項與現值）。
@@ -343,7 +387,8 @@ func (h *Handler) buildFormFields(s *session, l *meta.List, item map[string]any)
 				ff.JSON = string(b)
 			}
 		case "relationship":
-			ff.Options, ff.Denied = h.relationOptions(s, f, v)
+			ff.Denied = !access.CanOperate(f.Ref, access.OpQuery, s.role)
+			ff.SelectedJSON = selectedJSON(f, v)
 		case "timestamp":
 			if str, ok := v.(string); ok && str != "" {
 				if t, err := time.Parse(time.RFC3339, str); err == nil {
@@ -365,48 +410,35 @@ func (h *Handler) buildFormFields(s *session, l *meta.List, item map[string]any)
 	return out
 }
 
-// relationOptions 載入關聯目標 list 的選項（前 100 筆）並標記現值；
-// denied 表示無權查詢目標 list（欄位唯讀）。
-func (h *Handler) relationOptions(s *session, f meta.Field, current any) (opts []option, denied bool) {
-	target, ok := meta.Get(f.Ref)
-	if !ok {
-		return nil, true
+// selectedJSON 將關聯現值序列化為 [{id,label}]（picker 初始 chips）。
+func selectedJSON(f meta.Field, current any) string {
+	label := "name"
+	if target, ok := meta.Get(f.Ref); ok {
+		label = target.LabelField
 	}
-	selected := map[string]bool{}
+	var out []option
+	add := func(m map[string]any) {
+		id, _ := m["id"].(string)
+		lb, _ := m[label].(string)
+		if id != "" {
+			out = append(out, option{ID: id, Label: lb})
+		}
+	}
 	switch cv := current.(type) {
 	case map[string]any: // 單值關聯 {id label}
-		if id, ok := cv["id"].(string); ok {
-			selected[id] = true
-		}
+		add(cv)
 	case []any: // 多值關聯
 		for _, item := range cv {
 			if m, ok := item.(map[string]any); ok {
-				if id, ok := m["id"].(string); ok {
-					selected[id] = true
-				}
+				add(m)
 			}
 		}
 	}
-	q := fmt.Sprintf(`{ items: %s(first: 100){ edges{node{ id %s }} } }`, target.QueryField, target.LabelField)
-	data, errs := h.exec(s.token, q, nil)
-	if len(errs) > 0 || data["items"] == nil {
-		return nil, true // 無權查詢目標 list：欄位唯讀
+	if out == nil {
+		return "[]"
 	}
-	var conn struct {
-		Edges []struct {
-			Node map[string]any `json:"node"`
-		} `json:"edges"`
-	}
-	if err := json.Unmarshal(data["items"], &conn); err != nil {
-		return nil, true
-	}
-	for _, e := range conn.Edges {
-		id, _ := e.Node["id"].(string)
-		label, _ := e.Node[target.LabelField].(string)
-		opts = append(opts, option{ID: id, Label: label, Selected: selected[id]})
-	}
-	sort.Slice(opts, func(i, j int) bool { return opts[i].Label < opts[j].Label })
-	return opts, false
+	b, _ := json.Marshal(out)
+	return string(b)
 }
 
 // formToInput 將表單值轉為 Create/Update input 物件。

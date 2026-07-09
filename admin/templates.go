@@ -56,6 +56,28 @@ form.item textarea{min-height:8rem;font-family:ui-monospace,monospace;font-size:
 .err{background:#fef2f2;color:#b91c1c;padding:.6rem .9rem;border-radius:6px;margin-bottom:1rem;font-size:.85rem}
 .note{font-size:.75rem;color:var(--muted)}
 .count{font-size:.8rem;color:var(--muted)}
+/* rich text 編輯器 */
+.rt{border:1px solid #ccc;border-radius:6px;background:#fff}
+.rt-toolbar{display:flex;gap:.15rem;padding:.35rem;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rt-toolbar button{border:0;background:transparent;border-radius:4px;padding:.25rem .55rem;cursor:pointer;font-size:.85rem;min-width:2rem}
+.rt-toolbar button:hover{background:var(--bg)}
+.rt-toolbar button.on{background:#e8e8e6;font-weight:600}
+.rt-body .ProseMirror{padding:.75rem;min-height:10rem;outline:none;font-size:.95rem;line-height:1.7}
+.rt-body .ProseMirror p{margin:.4rem 0}
+.rt-body .ProseMirror h2,.rt-body .ProseMirror h3{margin:.8rem 0 .3rem}
+.rt-body .ProseMirror blockquote{border-left:3px solid var(--line);margin:.5rem 0;padding-left:.75rem;color:var(--muted)}
+.rt-body .ProseMirror [data-type]{border:1px dashed #bbb;border-radius:6px;padding:.5rem;margin:.5rem 0;color:var(--muted);font-size:.8rem}
+.rt-body iframe{max-width:100%}
+/* 關聯 picker */
+.relpicker{position:relative;border:1px solid #ccc;border-radius:6px;background:#fff;padding:.35rem}
+.relpicker .chips{display:flex;gap:.3rem;flex-wrap:wrap}
+.relpicker .chip{background:#eef1f4;border-radius:99px;padding:.15rem .3rem .15rem .7rem;font-size:.8rem;display:inline-flex;align-items:center;gap:.15rem}
+.relpicker .chip button{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:.9rem}
+.relpicker .relsearch{border:0;outline:none;padding:.3rem;font:inherit;font-size:.85rem;width:14rem;background:transparent}
+.relresults{position:absolute;left:0;right:0;top:100%;z-index:10;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);max-height:14rem;overflow:auto}
+.relopt{display:block;width:100%;text-align:left;border:0;background:#fff;padding:.45rem .7rem;cursor:pointer;font-size:.85rem}
+.relopt:hover{background:var(--bg)}
+.relempty{padding:.45rem .7rem;color:var(--muted);font-size:.8rem}
 </style></head><body>
 <div class="layout">
 <nav>
@@ -64,7 +86,9 @@ form.item textarea{min-height:8rem;font-family:ui-monospace,monospace;font-size:
   <div class="who">{{.User}}（{{.Role}}）<br><a href="/admin/logout">登出</a></div>
 </nav>
 <main>{{.Body}}</main>
-</div></body></html>`))
+</div>
+<script src="/admin/static/admin.js" defer></script>
+</body></html>`))
 
 var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><title>登入 — nl CMS</title>
@@ -169,17 +193,18 @@ var formBodyTmpl = template.Must(template.New("form").Parse(`
       {{range .Enum}}<option value="{{.}}" {{if eq . $v}}selected{{end}}>{{.}}</option>{{end}}
     </select>
   {{else if eq .Type "richText"}}
-    <textarea name="{{.Name}}" placeholder="ProseMirror doc JSON">{{.JSON}}</textarea>
+    <textarea id="rt-{{.Name}}" name="{{.Name}}" hidden>{{.JSON}}</textarea>
+    <div class="rt" data-input="rt-{{.Name}}"></div>
   {{else if eq .Type "password"}}
     <input type="password" name="{{.Name}}" placeholder="{{if $.ID}}留空表示不變更{{end}}">
   {{else if eq .Type "relationship"}}
     {{if .Denied}}<div class="note">（無權瀏覽 {{.Ref}}，此欄位唯讀）</div>
     {{else}}
     <input type="hidden" name="_present_{{.Name}}" value="1">
-    <select name="{{.Name}}" {{if .Many}}multiple size="6"{{end}}>
-      {{if not .Many}}<option value=""></option>{{end}}
-      {{range .Options}}<option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>{{end}}
-    </select>
+    <div class="relpicker" data-name="{{.Name}}" data-list="{{.Ref}}" data-many="{{.Many}}" data-selected="{{.SelectedJSON}}">
+      <div class="chips"></div>
+      <input type="text" class="relsearch" placeholder="搜尋 {{.Ref}}…" autocomplete="off">
+    </div>
     {{end}}
   {{else}}
     <input type="text" name="{{.Name}}" value="{{.Value}}">

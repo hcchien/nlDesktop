@@ -7,15 +7,14 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test.mjs"
+    "test": "node test.mjs",
+    "build": "esbuild admin-ui.mjs --bundle --minify --format=iife --global-name=nlAdmin --outfile=../admin/static/admin.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@tiptap/core": "^2.14.0",
-    "@tiptap/html": "^2.14.0",
-    "@tiptap/starter-kit": "^2.14.0",
     "@tiptap/extension-image": "^2.14.0",
     "@tiptap/extension-link": "^2.14.0",
     "@tiptap/extension-subscript": "^2.14.0",
@@ -23,6 +22,11 @@
     "@tiptap/extension-text-align": "^2.14.0",
     "@tiptap/extension-underline": "^2.14.0",
     "@tiptap/extension-youtube": "^2.14.0",
+    "@tiptap/html": "^2.14.0",
+    "@tiptap/starter-kit": "^2.14.0",
     "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

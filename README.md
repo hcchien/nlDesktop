@@ -149,11 +149,17 @@ go run ./cmd/nl gen   # 展開 ent schema / GraphQL mutations / resolvers / owne
 ## Admin UI
 
 `http://localhost:8080/admin` —— server-rendered、schema-driven 的管理後台：
-列表（cursor 分頁）、編輯表單（欄位依 DSL 型別生成：select 下拉、關聯單/多選、
-datetime、richText JSON）、新增與刪除。**所有操作經 in-process GraphQL、
-帶登入者自己的 token**，權限與 API/MCP 完全一致，admin 沒有特權路徑
-（editor 登入只看得到自己的文章、contributor 打 /admin/l/User 會被資料層擋下）。
-richText 目前以 JSON textarea 呈現，內嵌 Tiptap 編輯器為後續工作。
+列表（cursor 分頁）、編輯表單（欄位依 DSL 型別生成）、新增與刪除。
+**所有操作經 in-process GraphQL、帶登入者自己的 token**，權限與 API/MCP 完全一致，
+admin 沒有特權路徑（editor 登入只看得到自己的文章、contributor 打 /admin/l/User
+會被資料層擋下）。
+
+- **richText = 內嵌 Tiptap 所見即所得編輯器**（粗體/斜體/標題/清單/引用/連結/YouTube）。
+  編輯器 bundle 由 converter 以**同一份 schema**（[converter/schema.mjs](converter/schema.mjs)）
+  建置，因此編輯器產物必然通過 server 端白名單驗證；改 schema 後執行
+  `cd converter && npm run build` 重建 [admin/static/admin.js](admin/static/admin.js)（committed）。
+- **關聯欄位 = 可搜尋 picker（chips）**：即時搜尋目標 list（`/admin/api/options`，
+  label contains 不分大小寫、經 GraphQL 故權限一致），多值以 chips 增減。
 
 ## Migration
 
