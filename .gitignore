@@ -1,6 +1,7 @@
-nl-server-bin
-nl-server
-nl-mcp
+# 本機編譯產物（根目錄限定——不可用裸名稱，會誤傷 cmd/nl-server 等目錄）
+/nl-server
+/nl-mcp
+/nl-server-bin
 *.test
 .env
 node_modules/
