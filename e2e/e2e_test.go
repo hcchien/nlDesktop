@@ -346,7 +346,7 @@ func TestRichText(t *testing.T) {
 		if rtURL == "" {
 			rtURL = "http://localhost:8082"
 		}
-		if resp, err := http.Get(rtURL + "/healthz"); err != nil || resp.StatusCode != 200 {
+		if resp, err := http.Get(rtURL + "/health"); err != nil || resp.StatusCode != 200 {
 			t.Skipf("skipping: richtext converter not running at %s (cd converter && npm start)", rtURL)
 		}
 

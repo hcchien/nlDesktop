@@ -38,7 +38,7 @@ jobs:
           npm ci
           npm test
           nohup npm start > /tmp/converter.log 2>&1 &
-          for i in $(seq 1 20); do curl -sf localhost:8082/healthz && break || sleep 0.5; done
+          for i in $(seq 1 20); do curl -sf localhost:8082/health && break || sleep 0.5; done
       - name: Verify codegen is up to date
         run: |
           go run ./cmd/nl gen

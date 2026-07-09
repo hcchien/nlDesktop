@@ -5,3 +5,4 @@
 *.test
 .env
 node_modules/
+/cloud-sql-proxy

@@ -13,19 +13,19 @@ steps:
     args:
       - '-c'
       - |
-        docker pull gcr.io/$PROJECT_ID/nl:latest || exit 0
-        docker pull gcr.io/$PROJECT_ID/nl-converter:latest || exit 0
+        docker pull asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:latest || exit 0
+        docker pull asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:latest || exit 0
 
   # Build nl（nl-server + nl-mcp）
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - '-t'
-      - 'gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:${BRANCH_NAME}_${SHORT_SHA}'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/nl:latest'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:latest'
       - '--cache-from'
-      - 'gcr.io/$PROJECT_ID/nl:latest'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:latest'
       - .
 
   # Build nl-converter
@@ -33,11 +33,11 @@ steps:
     args:
       - build
       - '-t'
-      - 'gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:latest'
       - '--cache-from'
-      - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+      - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:latest'
       - converter
 
   # Push
@@ -46,8 +46,8 @@ steps:
     args:
       - '-c'
       - |
-        docker push --all-tags gcr.io/$PROJECT_ID/nl
-        docker push --all-tags gcr.io/$PROJECT_ID/nl-converter
+        docker push --all-tags asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl
+        docker push --all-tags asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter
 
   # Deploy nl-converter（rich text 轉換，無狀態）
   - name: gcr.io/cloud-builders/gcloud
@@ -56,7 +56,7 @@ steps:
       - run
       - deploy
       - 'nl-converter-${_ENV}'
-      - '--image=gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--image=asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
       - '--region=${_REGION}'
       - '--allow-unauthenticated'
 
@@ -67,7 +67,7 @@ steps:
       - run
       - deploy
       - 'nl-server-${_ENV}'
-      - '--image=gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--image=asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:${BRANCH_NAME}_${SHORT_SHA}'
       - '--region=${_REGION}'
       - '--allow-unauthenticated'
       - '--set-env-vars=NL_AUTO_MIGRATE=true'
@@ -81,7 +81,7 @@ steps:
       - run
       - deploy
       - 'nl-mcp-${_ENV}'
-      - '--image=gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
+      - '--image=asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:${BRANCH_NAME}_${SHORT_SHA}'
       - '--region=${_REGION}'
       - '--allow-unauthenticated'
       - '--command=/bin/sh'
@@ -98,10 +98,10 @@ substitutions:
   _RICHTEXT_URL: 'https://nl-converter-dev.example.run.app'
 
 images:
-  - 'gcr.io/$PROJECT_ID/nl:${BRANCH_NAME}_${SHORT_SHA}'
-  - 'gcr.io/$PROJECT_ID/nl:latest'
-  - 'gcr.io/$PROJECT_ID/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
-  - 'gcr.io/$PROJECT_ID/nl-converter:latest'
+  - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:${BRANCH_NAME}_${SHORT_SHA}'
+  - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl:latest'
+  - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:${BRANCH_NAME}_${SHORT_SHA}'
+  - 'asia-east1-docker.pkg.dev/$PROJECT_ID/nl/nl-converter:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

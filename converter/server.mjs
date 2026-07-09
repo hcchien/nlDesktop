@@ -31,7 +31,9 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(obj))
   }
   try {
-    if (req.method === 'GET' && req.url === '/healthz') {
+    // /healthz 在 Cloud Run 的 *.run.app 網域會被 Google Frontend 攔截，
+    // 因此以 /health 為主（/healthz 保留給本機相容）
+    if (req.method === 'GET' && (req.url === '/health' || req.url === '/healthz')) {
       return respond(200, { ok: true })
     }
     if (req.method !== 'POST') return respond(405, { error: 'method not allowed' })
