@@ -1,0 +1,6 @@
+nl-server-bin
+nl-server
+nl-mcp
+*.test
+.env
+node_modules/

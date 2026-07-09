@@ -1,0 +1,43 @@
+schema:
+  - ent.graphql
+  - graph/*.graphqls
+
+exec:
+  filename: graph/generated.go
+  package: graph
+
+resolver:
+  layout: follow-schema
+  dir: graph
+  package: graph
+  filename_template: "{name}.resolvers.go"
+
+autobind:
+  - github.com/hcchien/nl/ent
+
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.IntID
+  Node:
+    model:
+      - github.com/hcchien/nl/ent.Noder
+  Cursor:
+    model:
+      - github.com/hcchien/nl/ent.Cursor
+  PageInfo:
+    model:
+      - github.com/hcchien/nl/ent.PageInfo
+  OrderDirection:
+    model:
+      - github.com/hcchien/nl/ent.OrderDirection
+  Time:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
+  JSON:
+    model:
+      - github.com/99designs/gqlgen/graphql.Map
+
+model:
+  filename: graph/model/models_gen.go
+  package: model

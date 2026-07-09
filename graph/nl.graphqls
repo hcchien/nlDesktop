@@ -1,0 +1,26 @@
+# 框架自身的 API：auth 與 me。CRUD mutations 由 nl gen 生成（lists.graphqls）。
+
+"""RFC 3339 時間，映射至 Go time.Time（見 gqlgen.yml models）"""
+scalar Time
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+type ApiKeyPayload {
+  """明文金鑰，僅於簽發當下回傳一次"""
+  key: String!
+  name: String!
+}
+
+extend type Query {
+  """目前登入的使用者"""
+  me: User
+}
+
+extend type Mutation {
+  login(email: String!, password: String!): AuthPayload!
+  """為目前登入的使用者簽發 API key（供 MCP / server-to-server）"""
+  createApiKey(name: String!): ApiKeyPayload!
+}

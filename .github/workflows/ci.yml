@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nl
+          POSTGRES_PASSWORD: nl
+          POSTGRES_DB: nl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NL_TEST_DATABASE_URL: postgres://nl:nl@localhost:5432/nl_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Richtext converter (test + start)
+        working-directory: converter
+        run: |
+          npm ci
+          npm test
+          nohup npm start > /tmp/converter.log 2>&1 &
+          for i in $(seq 1 20); do curl -sf localhost:8082/healthz && break || sleep 0.5; done
+      - name: Verify codegen is up to date
+        run: |
+          go run ./cmd/nl gen
+          git diff --exit-code || (echo "::error::generated code is stale — run 'go run ./cmd/nl gen' and commit" && exit 1)
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Test (unit + integration)
+        run: go test ./... -count=1

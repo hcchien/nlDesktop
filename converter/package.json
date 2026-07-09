@@ -1,0 +1,28 @@
+{
+  "name": "nl-richtext-converter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "nl CMS rich text 轉換服務：HTML/Markdown ↔ ProseMirror doc JSON（與 Admin UI 共用 Tiptap schema）",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.14.0",
+    "@tiptap/html": "^2.14.0",
+    "@tiptap/starter-kit": "^2.14.0",
+    "@tiptap/extension-image": "^2.14.0",
+    "@tiptap/extension-link": "^2.14.0",
+    "@tiptap/extension-subscript": "^2.14.0",
+    "@tiptap/extension-superscript": "^2.14.0",
+    "@tiptap/extension-text-align": "^2.14.0",
+    "@tiptap/extension-underline": "^2.14.0",
+    "@tiptap/extension-youtube": "^2.14.0",
+    "marked": "^15.0.0"
+  }
+}
